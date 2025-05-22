@@ -20,6 +20,11 @@ import (
 	"golang.org/x/image/webp"
 )
 
+type dims struct {
+	x int
+	y int
+}
+
 // primary image struct
 type ImgObj struct {
 	src_path  string

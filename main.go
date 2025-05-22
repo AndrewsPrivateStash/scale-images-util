@@ -18,11 +18,6 @@ import (
 	"sync"
 )
 
-type dims struct {
-	x int
-	y int
-}
-
 type Args struct {
 	inPath  string
 	outPath string
