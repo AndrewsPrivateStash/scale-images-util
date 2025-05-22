@@ -13,6 +13,9 @@ the dimension ratio factor is calculated as: r = sqrt(t / T)
 When the -f flag is not set; the src directory structure will be re-produced in the out dir defined by -o
     the out_dir will only contain roots such that an image exists in that tree
 
+The CatmullRom kernel is used for interpolation, which is very slow, but produces nice resizing results.
+https://pkg.go.dev/golang.org/x/image/draw#pkg-variables
+
 
 </pre>
 
