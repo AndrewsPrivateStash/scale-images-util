@@ -14,6 +14,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/image/draw"
 	"golang.org/x/image/tiff"
@@ -164,7 +165,14 @@ func (im *ImgObj) resize_img() {
 
 // encode resized image to jpeg using passed quality and write to dest_path
 func (im *ImgObj) encode_and_write(qual int) error {
-	out, err := os.Create(im.dest_path)
+
+	write_path := im.dest_path
+	ext := filepath.Ext(im.dest_path)
+	if ext != ".jpg" {
+		write_path = strings.TrimSuffix(im.dest_path, ext) + ".jpg"
+	}
+
+	out, err := os.Create(write_path)
 	if err != nil {
 		return err
 	}
