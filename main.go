@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 )
 
@@ -74,14 +75,35 @@ func main() {
 	}
 
 	// make output folder
+	fmt.Printf("making out dir: %s\n", *outPathF)
 	if err := os.MkdirAll(*outPathF, 0755); err != nil {
 		log.Fatal(err)
 	}
 
+	// output controler
+	outCtrlCh := make(chan bool)
+
+	// stdout coordination
+	outputCh := make(chan string, 10)
+	go func() {
+		for msg := range outputCh {
+			fmt.Print(msg)
+		}
+		outCtrlCh <- true
+		close(outCtrlCh)
+	}()
+
 	wg.Add(1)
-	process_files(args.inPath, args.outPath, args, TRK)
-	if args.rec {
-		wg.Wait()
+	process_files(args.inPath, args.outPath, args, TRK, outputCh)
+	wg.Wait()
+	close(outputCh)
+
+	// ensure the output buffer completes
+	for {
+		fin := <-outCtrlCh
+		if fin {
+			break
+		}
 	}
 
 	print_track_data(TRK)
@@ -100,6 +122,7 @@ func remove_out_dir(path string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
 	} else if err == nil {
+		fmt.Printf("removing current outpath dir: %s\n", path)
 		os.RemoveAll(path)
 		return nil
 	} else {
@@ -117,7 +140,7 @@ func isFile(path string) bool {
 
 // does the file have an extension we can handle
 func canProc(path string) bool {
-	ext := filepath.Ext(path)
+	ext := strings.ToLower(filepath.Ext(path))
 	if ext != "" {
 		return slices.Contains(TYPES, ext[1:])
 	}
@@ -172,11 +195,12 @@ func load_img(img_path string, dest_dir string) *ImgObj {
 	return newImgObj(img_path, filepath.Join(dest_dir, fn))
 }
 
-func process_files(path string, out_dir string, a Args, trk Tracking) {
+func process_files(path string, out_dir string, a Args, trk Tracking, msgCh chan string) {
+	defer wg.Done()
 
 	// single file case
 	if isFile(path) {
-		log.Printf("processing single file: %s\t--->\t%s\n", path, a.outPath)
+		out_msg := fmt.Sprintf("processing single file: %s ---> %s\n", path, a.outPath)
 		img := load_img(path, a.outPath)
 		if img == nil {
 			log.Fatalf("did not load file\n%s\n", path)
@@ -184,6 +208,8 @@ func process_files(path string, out_dir string, a Args, trk Tracking) {
 		if err := img.proc_img(a, trk); err != nil {
 			log.Fatalf("error processing file: %s\n%s\n", img.src_path, err)
 		}
+		out_msg += fmt.Sprintf("%s\n", img.report_redim())
+		msgCh <- out_msg
 		return
 	}
 
@@ -198,30 +224,38 @@ func process_files(path string, out_dir string, a Args, trk Tracking) {
 			continue
 		}
 
+		img_path := filepath.Join(path, file.Name())
+		out_msg := fmt.Sprintf("working on: %s\t", img_path)
+
 		if !canProc(file.Name()) {
+			out_msg += "skipping file\n"
+			msgCh <- out_msg
 			LOCK.Lock()
 			trk["skipped"]++
 			LOCK.Unlock()
 			continue
 		}
 
-		img_path := filepath.Join(path, file.Name())
 		img := load_img(img_path, out_dir)
 		if img == nil {
-			log.Printf("err: could not load img: %s\n", img_path)
+			out_msg += "err: could not load img\n"
+			msgCh <- out_msg
 			LOCK.Lock()
 			trk["errored"]++
 			LOCK.Unlock()
 			continue
 		}
 
-		fmt.Printf("working on: %s\n", img_path)
 		if err := img.proc_img(a, trk); err != nil {
-			log.Printf("error processing img: %s\n%s\n", img.src_path, err)
+			out_msg += fmt.Sprintf("error processing img: %s\n", err)
+			msgCh <- out_msg
 			LOCK.Lock()
 			trk["errored"]++
 			LOCK.Unlock()
+			continue
 		}
+		out_msg += fmt.Sprintf("%s\n", img.report_redim())
+		msgCh <- out_msg
 
 	}
 
@@ -252,11 +286,10 @@ func process_files(path string, out_dir string, a Args, trk Tracking) {
 			go process_files(
 				next_src_dir,
 				next_out_dir,
-				a, trk,
+				a, trk, msgCh,
 			)
 
 		}
 	}
-	wg.Done()
 
 }

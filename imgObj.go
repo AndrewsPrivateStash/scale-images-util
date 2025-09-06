@@ -45,6 +45,7 @@ func newImgObj(src_path string, dest_path string) *ImgObj {
 	return img
 }
 
+// debug print object
 func (im *ImgObj) print(str io.Writer) {
 
 	out_str := fmt.Sprintf("src_path: %s\ndest_path: %s\n", im.src_path, im.dest_path)
@@ -59,6 +60,16 @@ func (im *ImgObj) print(str io.Writer) {
 
 }
 
+// return the dimensions pre and post
+func (im *ImgObj) report_redim() string {
+	pre_pxls := im.src_dims.x * im.src_dims.y
+	post_pxls := im.red_dims.x * im.red_dims.y
+	reduction := float64(post_pxls-pre_pxls) / float64(pre_pxls) * 100.0
+	out_str := fmt.Sprintf("pre: [%d, %d], post: [%d, %d] %.1f%%", im.src_dims.x, im.src_dims.y, im.red_dims.x, im.red_dims.y, reduction)
+
+	return out_str
+}
+
 // decode image based on extension, sets src_img
 func (im *ImgObj) decode_img() error {
 	if im.src_path == "" {
@@ -69,7 +80,7 @@ func (im *ImgObj) decode_img() error {
 	img, _ := os.Open(src_path)
 	defer img.Close()
 
-	ext := filepath.Ext(src_path)[1:]
+	ext := strings.ToLower(filepath.Ext(src_path)[1:])
 	if ext == "" {
 		return fmt.Errorf("no extension for file: %s", filepath.Base(src_path))
 	}
